@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>TOTP Manager</title>
+    <style>
+        :root {
+            --liberty-yellow: #FFD000;
+            --liberty-blue: #1A1446;
+            --liberty-teal: #78E1E1;
+            --liberty-medium-teal: #28A3AF;
+            --liberty-dark-teal: #06748C;
+            --liberty-dark-gray: #343741;
+            --liberty-atmospheric-white: #F5F5F5;
+        }
+
+        body {
+            width: 400px;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+            background-color: white;
+            color: var(--liberty-dark-gray);
+        }
+
+        h2 {
+            margin-top: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--liberty-blue);
+        }
+
+        .add-icon {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            padding: 0;
+            color: var(--liberty-yellow);
+            margin: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .add-icon:hover {
+            color: var(--liberty-medium-teal);
+        }
+
+        .add-icon.hidden {
+            display: none;
+        }
+
+        .add-secret-form {
+            display: none;
+            border: 2px solid var(--liberty-teal);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: var(--liberty-atmospheric-white);
+        }
+
+        .add-secret-form.open {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: var(--liberty-blue);
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid var(--liberty-teal);
+            border-radius: 4px;
+            color: var(--liberty-dark-gray);
+        }
+
+        input::placeholder {
+            color: var(--liberty-dark-gray);
+            opacity: 0.6;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: var(--liberty-yellow);
+            color: var(--liberty-blue);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            flex: 1;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: var(--liberty-medium-teal);
+            color: white;
+        }
+
+        .cancel-btn {
+            background-color: var(--liberty-dark-gray);
+            color: white;
+        }
+
+        .cancel-btn:hover {
+            background-color: var(--liberty-blue);
+        }
+
+        .delete-btn {
+            background-color: #FF5722;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background-color: #E64A19;
+        }
+
+        .secret-list {
+            margin-top: 20px;
+        }
+
+        .secret-item {
+            padding: 15px;
+            border: 1px solid var(--liberty-teal);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: white;
+            position: relative;
+        }
+
+        .secret-item:hover {
+            border-color: var(--liberty-medium-teal);
+            background-color: var(--liberty-atmospheric-white);
+        }
+
+        .secret-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .totp-codes-preview {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 12px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .prev-code,
+        .next-code {
+            padding: 4px 8px;
+            border-radius: 3px;
+            background-color: var(--liberty-atmospheric-white);
+            color: var(--liberty-blue);
+            border: 1px solid var(--liberty-teal);
+        }
+
+        .prev-code:hover,
+        .next-code:hover {
+            background-color: var(--liberty-teal);
+            color: white;
+        }
+
+        .site-name {
+            font-weight: bold;
+            color: var(--liberty-blue);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .site-name:hover::after {
+            content: attr(data-url);
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background-color: var(--liberty-dark-gray);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-bottom: 5px;
+            pointer-events: none;
+        }
+
+        .site-name:hover::before {
+            content: '';
+            position: absolute;
+            bottom: calc(100% - 3px);
+            left: 8px;
+            border: 4px solid transparent;
+            border-top-color: var(--liberty-dark-gray);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .totp-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background-color: var(--liberty-atmospheric-white);
+            border: 1px solid var(--liberty-teal);
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .totp-code {
+            font-size: 24px;
+            font-weight: bold;
+            font-family: monospace;
+            flex-grow: 1;
+            color: var(--liberty-blue);
+        }
+
+        .timer-circle {
+            position: relative;
+            width: 40px;
+            height: 40px;
+        }
+
+        .timer-svg {
+            transform: rotate(-90deg);
+        }
+
+        .timer-circle-bg {
+            fill: none;
+            stroke: var(--liberty-teal);
+            stroke-width: 3;
+        }
+
+        .timer-circle-progress {
+            fill: none;
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .timer-circle-progress.green {
+            stroke: var(--liberty-medium-teal);
+        }
+
+        .timer-circle-progress.yellow {
+            stroke: var(--liberty-yellow);
+        }
+
+        .timer-circle-progress.red {
+            stroke: var(--liberty-dark-teal);
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--liberty-blue);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .edit-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            margin: 0;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--liberty-medium-teal);
+        }
+
+        .edit-icon:hover {
+            color: var(--liberty-dark-teal);
+        }
+
+        .copy-icon,
+        .delete-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            margin: 0;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .copy-icon {
+            color: var(--liberty-medium-teal);
+        }
+
+        .copy-icon:hover {
+            color: var(--liberty-dark-teal);
+        }
+
+        .delete-icon {
+            color: var(--liberty-dark-gray);
+        }
+
+        .delete-icon:hover {
+            color: var(--liberty-blue);
+        }
+
+        .empty-message {
+            text-align: center;
+            color: var(--liberty-dark-gray);
+            padding: 20px;
+        }
+
+        .advanced-options {
+            border-top: 1px solid var(--liberty-teal);
+            margin-top: 15px;
+            padding-top: 15px;
+            display: none;
+        }
+
+        .advanced-options.open {
+            display: block;
+        }
+
+        .advanced-toggle {
+            background: none;
+            border: none;
+            color: var(--liberty-blue);
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+            margin-bottom: 10px;
+        }
+
+        .advanced-toggle:hover {
+            color: var(--liberty-medium-teal);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .form-group.half {
+            flex: 1;
+        }
+
+        .totp-preview {
+            display: none !important;
+        }
+
+        .preview-label {
+            font-size: 11px;
+            color: var(--liberty-dark-gray);
+            margin-bottom: 5px;
+        }
+
+        .preview-codes {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 5px 0;
+        }
+
+        .preview-code {
+            padding: 5px 8px;
+            background-color: white;
+            border: 1px solid var(--liberty-teal);
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--liberty-blue);
+            flex-shrink: 0;
+            font-weight: bold;
+        }
+
+        .preview-code.current {
+            background-color: var(--liberty-yellow);
+            border-color: var(--liberty-yellow);
+            color: var(--liberty-blue);
+        }
+
+        .form-mode-indicator {
+            font-size: 12px;
+            color: var(--liberty-medium-teal);
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>
+        TOTP Manager
+        <button class="add-icon" id="toggleForm" title="Add Secret">+</button>
+    </h2>
+
+    <div class="add-secret-form" id="addSecretForm">
+        <div class="form-mode-indicator" id="formModeIndicator" style="display: none;"></div>
+
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input id="name" placeholder="e.g., GitHub" type="text">
+        </div>
+
+        <div class="form-group">
+            <label for="url">URL Pattern:</label>
+            <input id="url" placeholder="e.g., github.com" type="text">
+        </div>
+
+        <div class="form-group">
+            <label for="secret">TOTP Secret:</label>
+            <input id="secret" placeholder="e.g., JBSWY3DPEHPK3PXP" type="text">
+        </div>
+
+        <button class="advanced-toggle" id="toggleAdvanced">Advanced options ▼</button>
+
+        <div class="advanced-options" id="advancedOptions">
+            <div class="form-row">
+                <div class="form-group half">
+                    <label for="digits">Digits:</label>
+                    <input id="digits" type="number" min="4" max="8" value="6" placeholder="6">
+                </div>
+                <div class="form-group half">
+                    <label for="period">Period (seconds):</label>
+                    <input id="period" type="number" min="10" max="120" value="30" placeholder="30">
+                </div>
+            </div>
+        </div>
+
+        <div class="totp-preview" id="totpPreview">
+            <div class="preview-label">Preview - No. Codes:</div>
+            <div class="preview-codes" id="previewCodes"></div>
+        </div>
+
+        <div class="form-actions">
+            <button id="addSecret">Add</button>
+            <button class="cancel-btn" id="cancelAdd">Cancel</button>
+            <button class="delete-btn" id="deleteSecret" style="display: none;" title="Delete">Delete</button>
+        </div>
+    </div>
+
+    <div class="secret-list" id="secretList"></div>
+
+    <script src="totp.js"></script>
+    <script src="popup.js"></script>
+</body>
+
+</html>
