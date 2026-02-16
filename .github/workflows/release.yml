@@ -1,0 +1,157 @@
+name: Build and Release Extension
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to release (e.g., v1.0.0)'
+        required: true
+
+permissions:
+  actions: write
+  contents: write
+  id-token: write
+  pull-requests: write
+
+jobs:
+
+  create-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag information
+        id: tag_info
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME="${{ github.ref }}"
+            TAG_NAME="${TAG_NAME#refs/tags/}"
+          fi
+          
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Version: $TAG_NAME"
+
+      - name: Get tag description
+        id: tag_description
+        run: |
+          TAG_NAME="${{ steps.tag_info.outputs.tag_name }}"
+          
+          # Get the tag message/description
+          DESCRIPTION=$(git tag -l "$TAG_NAME" --format='%(contents)' 2>/dev/null || echo "")
+          
+          if [ -z "$DESCRIPTION" ]; then
+            # If no tag message, use commit message
+            DESCRIPTION=$(git log -1 --format='%b' 2>/dev/null || echo "Release $TAG_NAME")
+          fi
+          
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Tag description retrieved"
+
+      - name: Create extension package
+        id: create_package
+        run: |
+          TAG_NAME="${{ steps.tag_info.outputs.tag_name }}"
+          ZIP_NAME="totp-auto-copy-${TAG_NAME}.zip"
+          
+          # Verify all required files exist
+          for file in manifest.json background.js content.js popup.html popup.js totp.js; do
+            if [ ! -f "$file" ]; then
+              echo "Error: Required file $file not found"
+              exit 1
+            fi
+          done
+          
+          # Create zip with only necessary files
+          zip -r "$ZIP_NAME" \
+            manifest.json \
+            background.js \
+            content.js \
+            popup.html \
+            popup.js \
+            totp.js \
+            -x "*.git*" "*.md" "*.iml" ".idea/*" ".github/*" || { echo "Failed to create zip"; exit 1; }
+          
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+          echo "Created package: $ZIP_NAME"
+          
+          # Calculate file size
+          SIZE=$(du -h "$ZIP_NAME" | cut -f1)
+          echo "zip_size=$SIZE" >> $GITHUB_OUTPUT
+          
+          # List contents for verification
+          echo "Package contents:"
+          unzip -l "$ZIP_NAME"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          TAG_DESC="${{ steps.tag_description.outputs.description }}"
+          TAG_NAME="${{ steps.tag_info.outputs.tag_name }}"
+          
+          if [ -z "$TAG_DESC" ]; then
+            NOTES="## Release ${TAG_NAME}
+          
+          ### Installation
+          1. Download the \`totp-auto-copy-${TAG_NAME}.zip\` file below
+          2. Extract the contents
+          3. Open Chrome/Edge and go to extensions page
+          4. Enable Developer mode
+          5. Click 'Load unpacked' and select the extracted folder
+          
+          For detailed instructions, see the [README](.github/README.md)."
+          else
+            NOTES="$TAG_DESC
+          
+          ### Installation
+          1. Download the \`totp-auto-copy-${TAG_NAME}.zip\` file below
+          2. Extract the contents
+          3. Open Chrome/Edge and go to extensions page
+          4. Enable Developer mode
+          5. Click 'Load unpacked' and select the extracted folder
+          
+          For detailed instructions, see the [README](.github/README.md)."
+          fi
+          
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag_info.outputs.tag_name }}
+          name: Release ${{ steps.tag_info.outputs.tag_name }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          files: ${{ steps.create_package.outputs.zip_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          echo "## 🎉 Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.tag_info.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Package:** ${{ steps.create_package.outputs.zip_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Size:** ${{ steps.create_package.outputs.zip_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Release Assets" >> $GITHUB_STEP_SUMMARY
+          echo "- Extension package ready for distribution" >> $GITHUB_STEP_SUMMARY
+          echo "- Compatible with Chrome 88+ and Edge 88+" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag_info.outputs.tag_name }})" >> $GITHUB_STEP_SUMMARY
