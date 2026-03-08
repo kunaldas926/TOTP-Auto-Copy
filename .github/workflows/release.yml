@@ -8,7 +8,12 @@ on:
     inputs:
       tag:
         description: 'Tag name to release (e.g., v1.0.0)'
+        required: false
+        type: string
+      environment:
+        description: 'Environment to release to (e.g., Production, staging)'
         required: true
+        type: environment
 
 permissions:
   actions: write
@@ -20,6 +25,7 @@ jobs:
 
   create-release:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'Production' }}
     timeout-minutes: 10
 
     steps:
@@ -141,6 +147,105 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Publish to Microsoft Edge Add-ons Store
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          API_KEY: ${{ secrets.API_KEY }}
+          PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
+          ZIP_FILE: ${{ steps.create_package.outputs.zip_name }}
+          TAG_NAME: ${{ steps.tag_info.outputs.tag_name }}
+        run: |
+          NOTES="Automated release of version $TAG_NAME via GitHub Actions"
+          
+          echo "Step 1: Uploading package $ZIP_FILE..."
+          UPLOAD_URL="https://api.addons.microsoftedge.microsoft.com/v1/products/$PRODUCT_ID/submissions/draft/package"
+          
+          # Upload and capture headers to extract operation ID
+          UPLOAD_RESP=$(curl -s -i -X POST "$UPLOAD_URL" \
+            -H "X-ClientID: $CLIENT_ID" \
+            -H "Authorization: ApiKey $API_KEY" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@$ZIP_FILE")
+          
+          UPLOAD_OP_ID=$(echo "$UPLOAD_RESP" | grep -i "^Location:" | awk '{print $2}' | tr -d '\r' | tr -d '\n')
+          
+          if [ -z "$UPLOAD_OP_ID" ]; then
+            echo "Error: Failed to initiate upload. Response:"
+            echo "$UPLOAD_RESP"
+            exit 1
+          fi
+          
+          echo "Upload initiated. Operation ID: $UPLOAD_OP_ID"
+          
+          # Step 2: Poll upload status
+          STATUS_URL="https://api.addons.microsoftedge.microsoft.com/v1/products/$PRODUCT_ID/submissions/draft/package/operations/$UPLOAD_OP_ID"
+          echo "Step 2: Waiting for upload validation..."
+          
+          MAX_RETRIES=20
+          for i in $(seq 1 $MAX_RETRIES); do
+            sleep 15
+            STATUS_JSON=$(curl -s -H "X-ClientID: $CLIENT_ID" -H "Authorization: ApiKey $API_KEY" "$STATUS_URL")
+            STATUS=$(echo "$STATUS_JSON" | jq -r '.status')
+            
+            echo "Current Status: $STATUS ($i/$MAX_RETRIES)"
+            
+            if [ "$STATUS" == "Succeeded" ]; then
+              echo "Upload and validation successful!"
+              break
+            elif [ "$STATUS" == "Failed" ]; then
+              echo "Package validation failed: $(echo "$STATUS_JSON" | jq -r '.message')"
+              exit 1
+            fi
+            
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Timed out waiting for package validation."
+              exit 1
+            fi
+          done
+          
+          # Step 3: Publish
+          echo "Step 3: Publishing submission..."
+          PUBLISH_URL="https://api.addons.microsoftedge.microsoft.com/v1/products/$PRODUCT_ID/submissions"
+          PUBLISH_RESP=$(curl -s -i -X POST "$PUBLISH_URL" \
+            -H "X-ClientID: $CLIENT_ID" \
+            -H "Authorization: ApiKey $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"notes\": \"$NOTES\"}")
+          
+          PUBLISH_OP_ID=$(echo "$PUBLISH_RESP" | grep -i "^Location:" | awk '{print $2}' | tr -d '\r' | tr -d '\n')
+          
+          if [ -z "$PUBLISH_OP_ID" ]; then
+            echo "Error: Failed to initiate publishing. Response:"
+            echo "$PUBLISH_RESP"
+            exit 1
+          fi
+          
+          echo "Publish initiated. Operation ID: $PUBLISH_OP_ID"
+          
+          # Step 4: Poll publishing status
+          PUBLISH_STATUS_URL="https://api.addons.microsoftedge.microsoft.com/v1/products/$PRODUCT_ID/submissions/operations/$PUBLISH_OP_ID"
+          echo "Step 4: Waiting for publishing to complete..."
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            sleep 15
+            STATUS_JSON=$(curl -s -H "X-ClientID: $CLIENT_ID" -H "Authorization: ApiKey $API_KEY" "$PUBLISH_STATUS_URL")
+            STATUS=$(echo "$STATUS_JSON" | jq -r '.status')
+            
+            echo "Current Status: $STATUS ($i/$MAX_RETRIES)"
+            
+            if [ "$STATUS" == "Succeeded" ]; then
+              echo "Submission published successfully!"
+              break
+            elif [ "$STATUS" == "Failed" ]; then
+              echo "Publishing failed: $(echo "$STATUS_JSON" | jq -r '.message')"
+              exit 1
+            fi
+            
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Timed out waiting for publishing status, but the submission may still be in progress."
+            fi
+          done
+
       - name: Release Summary
         run: |
           echo "## 🎉 Release Created Successfully!" >> $GITHUB_STEP_SUMMARY
@@ -154,4 +259,5 @@ jobs:
           echo "- Compatible with Chrome 88+ and Edge 88+" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag_info.outputs.tag_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag_info.outputs.tag_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/detail/pdgdkjfplbnoaojkmboaaaogkebeecgi)" >> $GITHUB_STEP_SUMMARY

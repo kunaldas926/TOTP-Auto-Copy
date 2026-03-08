@@ -1,5 +1,7 @@
 # 🔐 TOTP Auto Copy - Browser Extension
 
+[![Microsoft Edge Add-ons Store](https://img.shields.io/badge/Microsoft%20Edge%20Add--ons-Store-blue)](https://microsoftedge.microsoft.com/addons/detail/pdgdkjfplbnoaojkmboaaaogkebeecgi)
+
 A secure and convenient browser extension for Microsoft Edge (and Chromium-based browsers) that automatically copies Time-Based One-Time Passwords (TOTP) to your clipboard when you visit configured websites.
 
 ## 📋 Table of Contents
@@ -54,9 +56,16 @@ A secure and convenient browser extension for Microsoft Edge (and Chromium-based
    - You should see "TOTP Auto Copy" in your extensions list
    - The extension icon should appear in your browser toolbar
 
-### Method 2: Install from Edge Add-ons Store (Coming Soon)
+### Method 2: Install from Edge Add-ons Store (Recommended)
 
-*This extension will be published to the Microsoft Edge Add-ons store in the future.*
+You can download and install the extension directly from the Microsoft Edge Add-ons store:
+
+[Get it from Microsoft Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/detail/pdgdkjfplbnoaojkmboaaaogkebeecgi)
+
+#### Store Details
+- **Store ID**: `0RDCKDQ3J27L`
+- **CRX ID**: `pdgdkjfplbnoaojkmboaaaogkebeecgi`
+- **Product ID**: `599fe75e-e081-4901-ab09-2e7b486a1f7d`
 
 ---
 
@@ -303,6 +312,11 @@ The extension requires the following permissions:
 ---
 
 ## 📝 Version History
+
+### Version 1.0.2 (March 2026)
+- 🚀 Automated publishing to Microsoft Edge Add-ons Store via GitHub Actions
+- 🛠️ Direct API integration (v1.1) with streamlined release workflow
+- ✅ Version bump to support new automated release process
 
 ### Version 1.0.1 (February 2026)
 - ✨ Enhanced UI with previous/next TOTP code display

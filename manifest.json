@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TOTP Auto Copy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Automatically copy TOTP codes to clipboard for configured URLs",
   "permissions": [
     "storage",
